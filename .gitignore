@@ -1,0 +1,43 @@
+# Build output
+bin/
+obj/
+publish/
+out/
+
+# Visual Studio / VS Code / Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# Test and coverage results
+TestResults/
+coverage/
+*.trx
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Local settings and secrets
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+.env
+.env.*
+*.pem
+*.pfx
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Claude Code local settings
+.claude/settings.local.json
