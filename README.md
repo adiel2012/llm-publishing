@@ -199,24 +199,36 @@ Either approach works; the critical requirement is a publicly reachable HTTPS UR
 
 ## Publishing to MCP Ecosystem
 
-Your MCP server can reach multiple AI platforms through direct connection and registry publication:
+Your MCP server can reach multiple AI platforms through a single remote endpoint:
 
 ```
-                    AWS Deployment
-                    https://your-domain.com/mcp
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-      ChatGPT           Claude          Other MCP
-      (Direct)         Registry          Clients
-                          │
-                          ▼
-                  MCP Ecosystem
-                   Discovery/Catalog
+     https://mcp.yourcompany.com/mcp
+                │
+        ┌───────┴────────┐
+        │                │
+        ▼                ▼
+  CLAUDE ECOSYSTEM   OPENAI ECOSYSTEM
+        │                │
+        ▼                ▼
+  Claude Connector  ChatGPT Plugin/App
+        │                │
+        ▼                ▼
+  "Your Company"    "Your Company"
+        │                │
+        ▼                ▼
+  User signs in    User signs in
+        │                │
+        └────────┬───────┘
+                 ▼
+           Your Product
+           (Same backend)
 ```
 
-**Key insight:** AWS hosting, MCP Registry publication, and ChatGPT discovery are **separate paths**. ChatGPT can connect directly to your remote MCP server without registry publication.
+**Key insight:** 
+- One remote MCP endpoint (`/mcp`) serves both Claude and OpenAI ecosystems
+- AWS hosting, MCP Registry publication, and ChatGPT discovery are **separate paths**
+- ChatGPT connects directly to your remote MCP server without registry publication
+- Both Claude and ChatGPT users authenticate independently and access the same backend
 
 ## Path 1: ChatGPT Integration (Direct Connection)
 
@@ -379,29 +391,118 @@ Your MCP server automatically works with OpenAI's remote MCP tooling.
 
 ## Summary: The 2026 Path
 
-| Goal | Required | Steps |
+### Core requirement: Remote MCP endpoint
+
+All paths start with deploying to AWS and exposing `https://your-domain.com/mcp`.
+
+### Then choose your distribution strategy:
+
+| Use Case | Steps | Notes |
 |---|---|---|
-| **Use locally with Claude Desktop** | Docker + local config | Run locally, add to `claude_desktop_config.json` |
-| **Connect to ChatGPT** | AWS deployment only | Deploy to AWS, test, connect in ChatGPT Developer Mode |
-| **Reach MCP ecosystem** | AWS + MCP Registry | Deploy to AWS, publish to registry, maintain |
-| **Use with OpenAI API apps** | AWS deployment + OpenAI SDK | Deploy to AWS, use remote MCP tool in API |
+| **Local testing** | Docker locally + Claude Desktop config | No AWS needed yet |
+| **ChatGPT access** | Deploy to AWS + ChatGPT Developer Mode | Direct connection, no registry |
+| **Claude ecosystem** | Deploy to AWS + publish to MCP Registry | Adds registry discoverability |
+| **Both Claude & ChatGPT** | Deploy to AWS + both paths above | Same backend, both ecosystems |
+| **OpenAI API apps** | Deploy to AWS + use remote MCP tool | Programmatic access |
 
 ### What You DON'T Need
 
 ```
-❌ REST API endpoints
-❌ OpenAPI spec
-❌ Multiple registries
-❌ ChatGPT app publication before testing
+❌ REST API endpoints (/api/add, /api/multiply)
+❌ OpenAPI spec (openapi.json)
+❌ Multiple registries or complex publishing
+❌ ChatGPT app marketplace publication (unless distributing to others)
+❌ Different backends for different platforms
 ```
 
 Just:
 ```
-✅ AWS deployment (HTTPS)
-✅ Remote MCP endpoint (/mcp)
-✅ Direct connection to ChatGPT
-✅ MCP Registry for discovery (optional)
+✅ One C# MCP server
+✅ AWS deployment with HTTPS
+✅ Remote /mcp endpoint
+✅ MCP tools (add, multiply) working correctly
 ```
+
+Both Claude and ChatGPT connect to the **same remote endpoint** and access the **same backend**.
+
+---
+
+## MCP Discoverability
+
+Once your remote MCP is deployed, it can be discovered through multiple channels.
+
+### Claude Discoverability
+
+**Via MCP Registry** ([registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io))
+
+The official MCP Registry launched in September 2025 and currently indexes ~20,000 servers. It serves as the single source of truth for publicly available MCP servers.
+
+**Steps:**
+
+1. **Publish to the registry** (see [Path 2: MCP Registry Publication](#path-2-mcp-registry-publication-ecosystem-discovery))
+2. Users discover your server in:
+   - Claude Desktop's MCP browser
+   - Claude.ai's available tools
+   - Direct registry search at `registry.modelcontextprotocol.io`
+
+**Discovery mechanism:**
+```
+registry.modelcontextprotocol.io
+    │
+    ├── Searches by name/description
+    ├── Lists tools exposed by your server
+    └── Provides direct endpoint URL
+```
+
+**Optional: Automatic discovery via .well-known**
+
+You can optionally publish server metadata at a well-known URL for automatic discovery:
+
+```
+https://your-domain.com/.well-known/mcp/server.json
+```
+
+The registry can auto-discover servers from this location, aligning with the 2026 roadmap for MCP Server Cards via .well-known URLs.
+
+### ChatGPT Discoverability
+
+**Via ChatGPT Plugin Directory**
+
+Once connected to ChatGPT (see [Path 1: ChatGPT Integration](#path-1-chatgpt-integration-direct-connection)), your MCP becomes discoverable through:
+
+1. **In-conversation suggestions** — ChatGPT suggests your MCP during relevant conversations
+2. **ChatGPT Plugin Directory** — Users find your app by searching by name
+3. **Direct links** — Share direct links to your MCP in ChatGPT
+
+**Enhanced Distribution (Organic Discovery)**
+
+ChatGPT provides "enhanced distribution" based on:
+- Usage metrics
+- User satisfaction ratings
+- Relevance to conversations
+
+**Important:** Enhanced distribution is automatic based on performance, not manual approval. You cannot apply for it, but it becomes more likely as usage increases.
+
+**Current limitations:**
+- Plugin discovery catalog is currently small
+- Skewed toward business/productivity tools
+- Models rarely consult the directory unless explicitly asked by users
+
+### Direct Access (No Directory Required)
+
+Users can connect to your MCP directly without registry publication:
+
+```
+Claude Desktop:
+  Settings → Developer → Custom MCPs → Add URL
+  https://your-domain.com/mcp
+
+ChatGPT:
+  Settings → Developer Mode → Add Remote MCP
+  https://your-domain.com/mcp
+```
+
+This allows testing and private use before public discovery.
 
 ---
 
