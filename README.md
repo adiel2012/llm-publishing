@@ -83,6 +83,15 @@ docker run --rm -p 8080:8080 --name calculator-mcp calculator-mcp
 
 The container listens on port 8080 and runs as a non-root user. The MCP endpoint is `http://localhost:8080/mcp`.
 
+## MCP Server
+
+This is a **Model Context Protocol (MCP)** server that exposes calculator tools through the MCP interface:
+
+- **Endpoint:** `/mcp` (JSON-RPC over HTTP)
+- **Spec:** [server.json](server.json)
+- **Used by:** Claude Desktop, Claude.ai, and other MCP-compatible clients
+- **Tools exposed:** `add`, `multiply`
+
 ## Using with Claude Desktop
 
 To use this MCP server locally with Claude Desktop:
@@ -147,31 +156,153 @@ Claude will use your MCP server's `add` and `multiply` tools automatically.
 - **Connection refused:** Check Docker container status with `docker ps`
 - **View logs:** `docker compose logs -f calculator-mcp`
 
-## Deploying
+## Deploying to AWS
 
-Intended path: Docker image, then Amazon ECR, then AWS App Runner, giving a public HTTPS endpoint such as `https://calculator-mcp.example.com/mcp`. Set the App Runner health check path to `/health` and the port to `8080`.
+To make your MCP accessible to ChatGPT and other remote clients, deploy it to AWS:
 
-## Publishing to Registries
+### Option 1: AWS App Runner (Easiest)
 
-This MCP can be published to three registries to make it available to the public:
+1. Build Docker image:
+   ```powershell
+   docker build -t calculator-mcp .
+   ```
+
+2. Push to Amazon ECR:
+   ```powershell
+   aws ecr create-repository --repository-name calculator-mcp
+   docker tag calculator-mcp:latest ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/calculator-mcp:latest
+   docker push ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/calculator-mcp:latest
+   ```
+
+3. Create AWS App Runner service:
+   - Source: Amazon ECR image
+   - Port: `8080`
+   - Health check path: `/health`
+   - CPU: 1 vCPU
+   - Memory: 2 GB
+
+4. Result: Public HTTPS endpoint `https://calculator-mcp.RANDOM.us-east-1.awsapprunner.com/mcp`
+
+### Option 2: ECS + Fargate + ALB
+
+For more control, use ECS Fargate with an Application Load Balancer:
 
 ```
-        MCP          Claude       OpenAI
-      Registry      Directory    Directory
-        v            v            v
+ALB (Application Load Balancer)
+  ↓
+Fargate Task
+  ↓
+C# MCP Server
 ```
 
-### Prerequisites for all registries:
+Either approach works; the critical requirement is a publicly reachable HTTPS URL ending in `/mcp`.
 
-1. **Deploy the server** to a public HTTPS endpoint (AWS App Runner recommended)
-2. **Update [server.json](server.json)** with your actual values:
-   - Replace `YOUR_GITHUB_USERNAME` with your GitHub username
-   - Replace `calculator-mcp.example.com` with your real domain
-   - Ensure the `remotes` URL points to your deployed HTTPS endpoint
+## Publishing to MCP Ecosystem
 
-### 1. MCP Registry
+Your MCP server can reach multiple AI platforms through direct connection and registry publication:
 
-The official [modelcontextprotocol.io registry](https://modelcontextprotocol.io):
+```
+                    AWS Deployment
+                    https://your-domain.com/mcp
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+          ▼                ▼                ▼
+      ChatGPT           Claude          Other MCP
+      (Direct)         Registry          Clients
+                          │
+                          ▼
+                  MCP Ecosystem
+                   Discovery/Catalog
+```
+
+**Key insight:** AWS hosting, MCP Registry publication, and ChatGPT discovery are **separate paths**. ChatGPT can connect directly to your remote MCP server without registry publication.
+
+## Path 1: ChatGPT Integration (Direct Connection)
+
+Connect your MCP directly to ChatGPT without waiting for registry publication.
+
+### Step 1: Deploy to AWS
+
+Deploy your C# MCP server to a public HTTPS endpoint. Recommended architecture:
+
+```
+                Internet
+                   │
+                   ▼
+        ┌─────────────────────┐
+        │  AWS API Gateway    │
+        │  or ALB             │
+        └──────────┬──────────┘
+                   │
+                   ▼
+        ┌─────────────────────┐
+        │  ECS / Fargate      │
+        │  (C# MCP Server)    │
+        └─────────────────────┘
+```
+
+Result: `https://your-domain.com/mcp`
+
+### Step 2: Ensure `/mcp` endpoint is exposed
+
+Your server exposes the MCP endpoint:
+```
+POST https://your-domain.com/mcp
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":1,"method":"tools/list"}
+```
+
+### Step 3: Test with MCP Inspector
+
+Before connecting to ChatGPT, test your remote server:
+
+```powershell
+npx @modelcontextprotocol/inspector https://your-domain.com/mcp
+```
+
+Verify these work:
+- `initialize` → server responds
+- `tools/list` → shows `add` and `multiply`
+- `tools/call` → successfully calls `add(2,4)` → returns `6`
+
+### Step 4: Connect to ChatGPT Developer Mode
+
+1. Open ChatGPT
+2. Go to **Settings** → **Developer mode**
+3. Click **Create app** or **Add remote MCP**
+4. Enter your endpoint: `https://your-domain.com/mcp`
+5. Configure authentication if needed (optional for testing)
+6. Click **Scan tools**
+7. ChatGPT discovers `add` and `multiply` tools
+8. Click **Create**
+9. Test: Ask ChatGPT "add 15 and 27"
+
+### Step 5: Publish as ChatGPT App (Optional)
+
+For Business/Enterprise/Edu workspaces:
+1. Once tested, proceed through **Draft** → **Test** → **Review** → **Publish**
+2. App becomes available in your workspace's approved connectors
+
+**Current support:** Developer Mode for Plus/Pro; full MCP support rolling out for Business/Enterprise/Edu
+
+---
+
+## Path 2: MCP Registry Publication (Ecosystem Discovery)
+
+Publish to the [official MCP Registry](https://registry.modelcontextprotocol.io) for broader MCP ecosystem discovery.
+
+**Important:** Registry publication is **separate from** ChatGPT integration. The registry helps other MCP clients discover your server, but doesn't automatically integrate with ChatGPT.
+
+### Step 1: Prepare metadata
+
+Update [server.json](server.json):
+- Replace `YOUR_GITHUB_USERNAME` with your GitHub username
+- Replace `calculator-mcp.example.com` with your actual domain
+- Ensure `remotes[0].url` points to your deployed HTTPS endpoint: `https://your-domain.com/mcp`
+
+### Step 2: Publish to MCP Registry
 
 ```powershell
 # Install MCP Publisher (requires Node.js)
@@ -183,57 +314,105 @@ mcp-publisher login github
 # Validate your server.json
 mcp-publisher validate
 
-# Publish to the MCP Registry
+# Publish to the official MCP Registry
 mcp-publisher publish
 ```
 
-After publishing, your MCP will be listed at: `https://modelcontextprotocol.io/servers`
+After publishing:
+- Listed at: [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io)
+- Other MCP clients can discover your server
+- Claude ecosystem participants can find your MCP
 
-### 2. Claude Directory
+### Step 3: Maintain your listing
 
-Make your MCP available in Claude Desktop and Claude.ai:
+- Keep `server.json` updated with new versions
+- Maintain your GitHub repository
+- Document changes in `README.md`
 
-1. Publish to the MCP Registry first (see above)
-2. The Claude team monitors the MCP Registry and may add top-tier MCPs to Claude Directory
-3. Alternatively, contact Anthropic at `mcp@anthropic.com` with:
-   - Your `server.json` metadata
-   - Public HTTPS endpoint URL
-   - Brief description of what your MCP does
+---
 
-Your MCP will then appear in:
-- Claude Desktop's MCP library
-- Claude.ai's custom tools section
+## Path 3: OpenAI API Integration (Application Level)
 
-### 3. OpenAI Directory
+For applications using OpenAI's API, use remote MCP tools:
 
-To publish to OpenAI's GPT custom actions marketplace:
+```powershell
+# Your application
+your-app.js
+    │
+    ├─→ OpenAI Responses API
+    │       │
+    │       └─→ Remote MCP tool
+    │               │
+    │               └─→ https://your-domain.com/mcp
+    │                       │
+    │                       └─→ AWS (Your C# server)
+    │
+    └─→ Call add/multiply via your MCP
+```
 
-1. [Create an OpenAI account](https://openai.com/signup) if you don't have one
-2. Access [Custom GPTs](https://chatgpt.com/gpts/mine)
-3. Create a new GPT or action
-4. Provide your MCP's **OpenAPI spec** (convert from MCP if needed)
-5. Configure authentication (if required)
-6. Set the endpoint to your deployed HTTPS URL
-7. Submit for review in the OpenAI directory
+Your MCP server automatically works with OpenAI's remote MCP tooling.
 
-**Note:** OpenAI uses OpenAPI specs, not MCP specs. You may need to:
-- Convert your MCP tools to OpenAPI format
-- Document parameters and return types clearly
-- Ensure endpoints are HTTPS with proper CORS headers
 
-### Publishing Checklist
+### Pre-Publication Checklist
 
-Before publishing to any registry:
+**Before connecting to ChatGPT:**
 
-- [ ] Server deployed to public HTTPS endpoint
-- [ ] `server.json` updated with correct GitHub username and domain
-- [ ] Health check endpoint responds with `{"status":"ok"}`
-- [ ] MCP tools are functional and tested
-- [ ] Add authentication/rate limiting if handling sensitive operations
-- [ ] Document tool parameters clearly
-- [ ] Add error handling for edge cases
-- [ ] Ensure no secrets in code or Docker image
+- [ ] Server deployed to AWS with public HTTPS URL
+- [ ] `/mcp` endpoint is accessible and responds to POST requests
+- [ ] Health check (`/health`) responds with `{"status":"ok"}`
+- [ ] MCP tools (`add`, `multiply`) work correctly
+- [ ] Tested with MCP Inspector: `npx @modelcontextprotocol/inspector https://your-domain.com/mcp`
+- [ ] `initialize` → `tools/list` → `tools/call` workflow verified
+- [ ] Tool descriptions are clear and helpful
+- [ ] Add OAuth/authentication if exposing sensitive operations
+- [ ] No secrets in code or Docker image
+- [ ] Server handles errors gracefully
+
+**Before MCP Registry publication:**
+
+- [ ] `server.json` has correct GitHub username and domain
+- [ ] `server.json` `remotes[0].url` points to your deployed endpoint
+- [ ] Server is stable and tested in production
+- [ ] Documentation in README.md is complete
+- [ ] Semantic versioning in `server.json`
+
+
+## Summary: The 2026 Path
+
+| Goal | Required | Steps |
+|---|---|---|
+| **Use locally with Claude Desktop** | Docker + local config | Run locally, add to `claude_desktop_config.json` |
+| **Connect to ChatGPT** | AWS deployment only | Deploy to AWS, test, connect in ChatGPT Developer Mode |
+| **Reach MCP ecosystem** | AWS + MCP Registry | Deploy to AWS, publish to registry, maintain |
+| **Use with OpenAI API apps** | AWS deployment + OpenAI SDK | Deploy to AWS, use remote MCP tool in API |
+
+### What You DON'T Need
+
+```
+❌ REST API endpoints
+❌ OpenAPI spec
+❌ Multiple registries
+❌ ChatGPT app publication before testing
+```
+
+Just:
+```
+✅ AWS deployment (HTTPS)
+✅ Remote MCP endpoint (/mcp)
+✅ Direct connection to ChatGPT
+✅ MCP Registry for discovery (optional)
+```
+
+---
 
 ## Security
 
-The server has no authentication, which is acceptable for a public calculator. Add authentication, rate limiting and logging before exposing anything sensitive. Never put secrets in `server.json`, source control, or the Docker image.
+The server currently has no authentication. For testing a harmless calculator, this is acceptable. For production services handling sensitive operations:
+
+- Add **OAuth 2.0 / OpenID Connect** authentication
+- Ensure **refresh-token support** for long-lived connections
+- Implement **rate limiting** and **logging**
+- Never store secrets in code, Docker images, or `server.json`
+- Only expose necessary tools
+
+The same authentication mechanism works for both ChatGPT and MCP Registry connections.
