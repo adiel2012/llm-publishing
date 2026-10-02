@@ -83,6 +83,70 @@ docker run --rm -p 8080:8080 --name calculator-mcp calculator-mcp
 
 The container listens on port 8080 and runs as a non-root user. The MCP endpoint is `http://localhost:8080/mcp`.
 
+## Using with Claude Desktop
+
+To use this MCP server locally with Claude Desktop:
+
+### 1. Start the server
+
+Using Docker Compose (recommended):
+```powershell
+docker compose up -d --build
+```
+
+Or run locally with .NET:
+```powershell
+dotnet run --urls http://localhost:5099
+```
+
+### 2. Edit Claude Desktop config
+
+Locate and edit your Claude Desktop configuration file:
+
+**On Windows:**
+```
+%APPDATA%\Claude\claude_desktop_config.json
+```
+
+**On macOS:**
+```
+~/.claude/claude_desktop_config.json
+```
+
+### 3. Add the MCP server
+
+Add an `mcpServers` section with your calculator server:
+
+```json
+{
+  "mcpServers": {
+    "calculator": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+If using local .NET instead of Docker, use `http://localhost:5099/mcp`.
+
+### 4. Restart Claude Desktop
+
+Close and reopen Claude Desktop to load the new MCP configuration.
+
+### 5. Test it
+
+In Claude Desktop, ask Claude to:
+- "Add 15 and 27"
+- "Multiply 8 by 12"
+
+Claude will use your MCP server's `add` and `multiply` tools automatically.
+
+### Troubleshooting
+
+- **MCP not showing up:** Verify the server is running (`curl http://localhost:8080/health`)
+- **Connection refused:** Check Docker container status with `docker ps`
+- **View logs:** `docker compose logs -f calculator-mcp`
+
 ## Deploying
 
 Intended path: Docker image, then Amazon ECR, then AWS App Runner, giving a public HTTPS endpoint such as `https://calculator-mcp.example.com/mcp`. Set the App Runner health check path to `/health` and the port to `8080`.
