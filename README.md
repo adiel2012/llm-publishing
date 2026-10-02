@@ -151,20 +151,88 @@ Claude will use your MCP server's `add` and `multiply` tools automatically.
 
 Intended path: Docker image, then Amazon ECR, then AWS App Runner, giving a public HTTPS endpoint such as `https://calculator-mcp.example.com/mcp`. Set the App Runner health check path to `/health` and the port to `8080`.
 
-## Publishing to the MCP Registry
+## Publishing to Registries
 
-Before publishing, edit [server.json](server.json) and replace the placeholders:
+This MCP can be published to three registries to make it available to the public:
 
-- `YOUR_GITHUB_USERNAME` with your GitHub username
-- `calculator-mcp.example.com` with your real domain
+```
+        MCP          Claude       OpenAI
+      Registry      Directory    Directory
+        v            v            v
+```
 
-Then:
+### Prerequisites for all registries:
+
+1. **Deploy the server** to a public HTTPS endpoint (AWS App Runner recommended)
+2. **Update [server.json](server.json)** with your actual values:
+   - Replace `YOUR_GITHUB_USERNAME` with your GitHub username
+   - Replace `calculator-mcp.example.com` with your real domain
+   - Ensure the `remotes` URL points to your deployed HTTPS endpoint
+
+### 1. MCP Registry
+
+The official [modelcontextprotocol.io registry](https://modelcontextprotocol.io):
 
 ```powershell
+# Install MCP Publisher (requires Node.js)
+npm install -g @modelcontextprotocol/publisher
+
+# Login with GitHub
 mcp-publisher login github
+
+# Validate your server.json
 mcp-publisher validate
+
+# Publish to the MCP Registry
 mcp-publisher publish
 ```
+
+After publishing, your MCP will be listed at: `https://modelcontextprotocol.io/servers`
+
+### 2. Claude Directory
+
+Make your MCP available in Claude Desktop and Claude.ai:
+
+1. Publish to the MCP Registry first (see above)
+2. The Claude team monitors the MCP Registry and may add top-tier MCPs to Claude Directory
+3. Alternatively, contact Anthropic at `mcp@anthropic.com` with:
+   - Your `server.json` metadata
+   - Public HTTPS endpoint URL
+   - Brief description of what your MCP does
+
+Your MCP will then appear in:
+- Claude Desktop's MCP library
+- Claude.ai's custom tools section
+
+### 3. OpenAI Directory
+
+To publish to OpenAI's GPT custom actions marketplace:
+
+1. [Create an OpenAI account](https://openai.com/signup) if you don't have one
+2. Access [Custom GPTs](https://chatgpt.com/gpts/mine)
+3. Create a new GPT or action
+4. Provide your MCP's **OpenAPI spec** (convert from MCP if needed)
+5. Configure authentication (if required)
+6. Set the endpoint to your deployed HTTPS URL
+7. Submit for review in the OpenAI directory
+
+**Note:** OpenAI uses OpenAPI specs, not MCP specs. You may need to:
+- Convert your MCP tools to OpenAPI format
+- Document parameters and return types clearly
+- Ensure endpoints are HTTPS with proper CORS headers
+
+### Publishing Checklist
+
+Before publishing to any registry:
+
+- [ ] Server deployed to public HTTPS endpoint
+- [ ] `server.json` updated with correct GitHub username and domain
+- [ ] Health check endpoint responds with `{"status":"ok"}`
+- [ ] MCP tools are functional and tested
+- [ ] Add authentication/rate limiting if handling sensitive operations
+- [ ] Document tool parameters clearly
+- [ ] Add error handling for edge cases
+- [ ] Ensure no secrets in code or Docker image
 
 ## Security
 
