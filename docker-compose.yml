@@ -1,0 +1,8 @@
+services:
+  calculator-mcp:
+    build: .
+    image: calculator-mcp
+    container_name: calculator-mcp
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

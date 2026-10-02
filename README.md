@@ -23,6 +23,7 @@ A simple remote [Model Context Protocol](https://modelcontextprotocol.io) server
 ├── Tools/
 │   └── CalculatorTools.cs  # add / multiply tools
 ├── Dockerfile
+├── docker-compose.yml
 ├── server.json             # MCP Registry metadata
 └── README.md
 ```
@@ -57,20 +58,27 @@ Invoke-WebRequest http://localhost:5099/mcp -Method Post -ContentType "applicati
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/). Run these from the repository root:
 
+### Docker Compose (recommended)
+
 ```powershell
-# Build the image
-docker build -t calculator-mcp .
+# Build and start in the background
+docker compose up -d --build
 
-# Run in the foreground (Ctrl+C to stop)
-docker run --rm -p 8080:8080 --name calculator-mcp calculator-mcp
-
-# Or run in the background
-docker run -d --rm -p 8080:8080 --name calculator-mcp calculator-mcp
-
-# Check it, view logs, and stop it
+# Check it, view logs
 curl http://localhost:8080/health
-docker logs calculator-mcp
-docker stop calculator-mcp
+docker compose logs -f
+
+# Stop and remove
+docker compose down
+```
+
+To run in the foreground instead, use `docker compose up --build` (Ctrl+C to stop).
+
+### Plain Docker
+
+```powershell
+docker build -t calculator-mcp .
+docker run --rm -p 8080:8080 --name calculator-mcp calculator-mcp
 ```
 
 The container listens on port 8080 and runs as a non-root user. The MCP endpoint is `http://localhost:8080/mcp`.
